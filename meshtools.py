@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.delaunay as triang
-from mpl_toolkits.mplot3d import axes3d
+from mpl_toolkits.mplot3d import Axes3D
 
 class Trimesh:
     """Inverted trimesh structure. TODO: Add edge processing."""
@@ -19,7 +19,13 @@ class Trimesh:
             xpts = np.array([self.p[tri[k],0] for k in [0,1,2,0]])
             ypts = np.array([self.p[tri[k],1] for k in [0,1,2,0]])
             plt.plot(xpts,ypts,'k')
-        plt.show()
+
+    def visualize_data(self, data):
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        X = self.p[:,0]
+        Y = self.p[:,1]
+        ax.scatter(X,Y,data)
             
 def square_mesh(N):
     """Build an uniform triangular mesh on unit square."""
@@ -31,7 +37,5 @@ def square_mesh(N):
 
     return Trimesh(p,t)
 
-def trisurf(t,x,y,u):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    X,Y = np.meshgrid(x,y)
+def draw_all():
+    plt.show()

@@ -22,3 +22,6 @@ F = np.setdiff1d(A,D)
 x = np.zeros(N)
 x[F] = np.linalg.solve(K[np.ix_(F,F)],f[F])
 
+mesh.visualize_data(x)
+
+draw_all()
