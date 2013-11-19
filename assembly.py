@@ -25,8 +25,12 @@ def triquad(d):
     n = d.size/3
     return np.vstack((d[0:n],d[n:2*n])).T, d[2*n:3*n]
 
-def affine_map_vec(mesh):
-    """Build affine mappings for all triangles."""
+def affine_map(mesh):
+    """
+    Build affine mappings F(x)=Ax+b for all triangles.
+    In addition, calculates the determinants and
+    the inverses of A's.
+    """
 
     A = {0:{},1:{}}
 
@@ -51,10 +55,12 @@ def affine_map_vec(mesh):
 
     return A,b,detA,invA
 
-def lin_basis_vec(qp):
-    """Return the values and gradients of linear
+def lin_basis(qp):
+    """
+    Return the values and gradients of linear
     reference triangle basis functions at local
-    quadrature points (qp)."""
+    quadrature points (qp).
+    """
     phi = {}
 
     phi[0] = 1.-qp[:,0]-qp[:,1]
@@ -69,16 +75,18 @@ def lin_basis_vec(qp):
 
     return phi, gradphi
 
-def bilin_asm_vec(bilin, mesh):
-    """Assembly the stiffness matrix (vectorized)."""
+def bilin_asm(bilin, mesh):
+    """
+    Assembly the bilinear form.
+    """
     N = mesh.p.shape[0]
     T = mesh.t.shape[0]
 
     qp,qw = triquad(dunavant2)
-    phi,gradphi = lin_basis_vec(qp)
-    A,b,detA,invA = affine_map_vec(mesh)
+    phi,gradphi = lin_basis(qp)
+    A,b,detA,invA = affine_map(mesh)
 
-    # Initialize sparse matrix structures
+    # Initialize sparse matrix structures for collecting K values
     data = np.array([])
     rows = np.array([])
     cols = np.array([])
@@ -105,20 +113,22 @@ def bilin_asm_vec(bilin, mesh):
 
     return coo_matrix((data,(rows,cols)), shape=(N,N)).tocsr()
 
-def lin_asm_vec(lin, mesh):
-    """Assembly the load vector (vectorized)."""
+def lin_asm(lin, mesh):
+    """
+    Assembly the linear form.
+    """
     N = mesh.p.shape[0]
     T = mesh.t.shape[0]
 
     qp,qw = triquad(dunavant2)
-    phi,gradphi = lin_basis_vec(qp)
-    A,b,detA,invA = affine_map_vec(mesh)
+    phi,gradphi = lin_basis(qp)
+    A,b,detA,invA = affine_map(mesh)
 
     # Initialize sparse matrix structures
     # NOTE: This is constructed as matrix
     #       because substitution with indexing
     #       doesn't support duplicate indices.
-    #       Better way to do this is welcome.
+    #       A better way to do this would be welcome.
     data = np.array([])
     rows = np.array([])
     cols = np.array([])

@@ -7,11 +7,10 @@ mesh = square_mesh(20)
 #mesh.visualize()
 
 dudv = lambda u,v,ux,uy,vx,vy,x,y: ux*vx+uy*vy
-K = bilin_asm_vec(dudv, mesh)
+K = bilin_asm(dudv, mesh)
 
 fv = lambda v,vx,vy,x,y: v
-#f = lin_asm(fv, mesh)
-f = lin_asm_vec(fv, mesh)
+f = lin_asm(fv, mesh)
 
 N = mesh.p.shape[0]
 A = np.arange(0,N)
@@ -25,11 +24,11 @@ F = np.setdiff1d(A,D)
 x = np.zeros(N)
 x[F] = spla.spsolve(K[F,:][:,F],f[F])
 
-if 0.0731 < np.max(x) and 0.0732 > np.max(x):
-    print "OK!"
-else:
-    print "ERROR IN CODE!"
-    print np.max(x)
+#   if 0.0731 < np.max(x) and 0.0732 > np.max(x):
+#       print "OK!"
+#   else:
+#       print "ERROR IN CODE!"
+#       print np.max(x)
 
 mesh.visualize_data(x)
 
