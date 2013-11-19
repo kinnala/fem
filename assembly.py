@@ -51,14 +51,6 @@ def affine_map_vec(mesh):
 
     return A,b,detA,invA
 
-def affine_map(tri, mesh):
-    """Build the affine mapping for 'tri'."""
-    n = mesh.p[tri]
-    A = np.vstack((n[1]-n[0],n[2]-n[0])).T
-    b = n[0]
-
-    return A,b
-
 def lin_basis_vec(qp):
     """Return the values and gradients of linear
     reference triangle basis functions at local
@@ -77,34 +69,16 @@ def lin_basis_vec(qp):
 
     return phi, gradphi
 
-def lin_basis(qp):
-    """Return the values and gradients of linear
-    reference triangle basis functions at local
-    quadrature points (qp)."""
-    phi = {}
-
-    phi[0] = 1.-qp[:,0]-qp[:,1]
-    phi[1] = qp[:,0]
-    phi[2] = qp[:,1]
-
-    gradphi = {}
-
-    gradphi[0] = np.array([-1.,-1.])
-    gradphi[1] = np.array([1.,0.])
-    gradphi[2] = np.array([0.,1.])
-
-    return phi, gradphi
-
 def bilin_asm_vec(bilin, mesh):
     """Assembly the stiffness matrix (vectorized)."""
     N = mesh.p.shape[0]
     T = mesh.t.shape[0]
-    K = np.zeros((N,N))
 
     qp,qw = triquad(dunavant2)
     phi,gradphi = lin_basis_vec(qp)
     A,b,detA,invA = affine_map_vec(mesh)
 
+    # Initialize sparse matrix structures
     data = np.array([])
     rows = np.array([])
     cols = np.array([])
@@ -118,78 +92,46 @@ def bilin_asm_vec(bilin, mesh):
             vx = np.outer(invA[0][0],gradphi[j][:,0])+np.outer(invA[1][0],gradphi[j][:,1])
             vy = np.outer(invA[0][1],gradphi[j][:,0])+np.outer(invA[1][1],gradphi[j][:,1])
             
-            #K[i,j] += np.dot(qw,bilin(u,v,ux,uy,vx,vy,0,0))*np.abs(detA)
-            #ipdb.set_trace()
-            x = np.dot(bilin(u,v,ux,uy,vx,vy,0,0),qw)*np.abs(detA)
-            data = np.append(data,x)
-            rows = np.append(rows,mesh.t[:,i])
-            cols = np.append(cols,mesh.t[:,j])
+            refKij = np.dot(bilin(u,v,ux,uy,vx,vy,0,0),qw)*np.abs(detA)
+            # Save the values
+            data = np.concatenate((data,refKij))
+            rows = np.concatenate((rows,mesh.t[:,i]))
+            cols = np.concatenate((cols,mesh.t[:,j]))
+            # Elemental stiffness matrix is symmetric
             if i != j:
-                data = np.append(data,x)
-                rows = np.append(rows,mesh.t[:,j])
-                cols = np.append(cols,mesh.t[:,i])
-            #ipdb.set_trace()
-                #ipdb.set_trace()
+                data = np.concatenate((data,refKij))
+                rows = np.concatenate((rows,mesh.t[:,j]))
+                cols = np.concatenate((cols,mesh.t[:,i]))
 
-    #    K[np.ix_(tri,tri)] += Ke
-    return coo_matrix((data,(rows,cols)), shape=(N,N)).todense()
+    return coo_matrix((data,(rows,cols)), shape=(N,N)).tocsr()
 
-def bilin_asm(bilin, mesh):
-    """Assembly the stiffness matrix."""
-    N = mesh.p.size/2
-    K = np.zeros((N,N))
+def lin_asm_vec(lin, mesh):
+    """Assembly the load vector (vectorized)."""
+    N = mesh.p.shape[0]
+    T = mesh.t.shape[0]
 
     qp,qw = triquad(dunavant2)
-    phi,gradphi = lin_basis(qp)
+    phi,gradphi = lin_basis_vec(qp)
+    A,b,detA,invA = affine_map_vec(mesh)
 
-    for tri in mesh.t:
-        # Local stiffness matrix
-        Ke = np.zeros((3,3))
-        # Affine mapping for 'tri'
-        A,b = affine_map(tri, mesh)
-        
-        detA = np.linalg.det(A)
-        invA = np.linalg.inv(A)
+    # Initialize sparse matrix structures
+    # NOTE: This is constructed as matrix
+    #       because substitution with indexing
+    #       doesn't support duplicate indices.
+    #       Better way to do this is welcome.
+    data = np.array([])
+    rows = np.array([])
+    cols = np.array([])
 
-        for i in [0,1,2]:
-            for j in [0,1,2]:
-                for ix,w in enumerate(qw): 
-                    u = phi[i][ix]
-                    v = phi[j][ix]
-                    ux,uy = np.dot(invA.T,gradphi[i])
-                    vx,vy = np.dot(invA.T,gradphi[j])
+    for i in [0,1,2]:
+        v = np.tile(phi[i],(T,1))
+        vx = np.outer(invA[0][0],gradphi[i][:,0])+np.outer(invA[1][0],gradphi[i][:,1])
+        vy = np.outer(invA[0][1],gradphi[i][:,0])+np.outer(invA[1][1],gradphi[i][:,1])
 
-                    ipdb.set_trace()
+        refFij = np.dot(lin(v,vx,vy,0,0),qw)*np.abs(detA)
+        data = np.concatenate((data,refFij))
+        rows = np.concatenate((rows,np.zeros(T)))
+        cols = np.concatenate((cols,mesh.t[:,i]))
 
-                    Ke[i,j] += w*bilin(u,v,ux,uy,vx,vy,0,0)*np.abs(detA)
+    return coo_matrix((data,(rows,cols)), shape=(1,N)).toarray()[0]
 
-        K[np.ix_(tri,tri)] += Ke
-
-    return K
-
-def lin_asm(lin,mesh):
-    """Assembly the load vector."""
-    N = mesh.p.size/2
-    f = np.zeros(N)
-
-    qp,qw = triquad(dunavant1)
-    phi,gradphi = lin_basis(qp)
-
-    for tri in mesh.t:
-        fe = np.zeros(3)
-
-        A,b = affine_map(tri, mesh)
-        
-        detA = np.linalg.det(A)
-        invA = np.linalg.inv(A)
-
-        for i in [0,1,2]:
-            for ix,w in enumerate(qw): 
-                v = phi[i][ix]
-                vx,vy = np.dot(invA.T,gradphi[i])
-
-                fe[i] += w*lin(v,vx,vy,0,0)*np.abs(detA)
-
-        f[tri] += fe
-
-    return f
